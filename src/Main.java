@@ -1,6 +1,7 @@
 package TomasCepukas_PI24SN_IS_5Uzduotis;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -13,12 +14,15 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import TomasCepukas_PI24SN_IS_5Uzduotis.model.AuthenticatedUser;
 import TomasCepukas_PI24SN_IS_5Uzduotis.model.PasswordEntry;
+import TomasCepukas_PI24SN_IS_5Uzduotis.service.PasswordGeneratorService;
 import TomasCepukas_PI24SN_IS_5Uzduotis.service.UserService;
 import TomasCepukas_PI24SN_IS_5Uzduotis.service.VaultService;
 import TomasCepukas_PI24SN_IS_5Uzduotis.util.AlertUtil;
@@ -28,6 +32,7 @@ import java.util.List;
 public class Main extends Application {
 
     private final UserService userService = new UserService();
+    private final PasswordGeneratorService passwordGeneratorService = new PasswordGeneratorService();
 
     private Stage stage;
     private AuthenticatedUser currentUser;
@@ -50,7 +55,10 @@ public class Main extends Application {
         this.stage.setTitle("Slaptazodziu tvarkykle");
         showLoginScene();
 
-        stage.setOnCloseRequest(event -> saveVault());
+        stage.setOnCloseRequest(event -> {
+            saveVault();
+            Platform.exit();
+        });
     }
 
     private void showLoginScene() {
@@ -141,6 +149,8 @@ public class Main extends Application {
         Button searchButton = new Button("Ieskoti");
         Button showAllButton = new Button("Rodyti visus");
         Button showPasswordButton = new Button("Rodyti slaptazodi");
+        Button copyPasswordButton = new Button("Kopijuoti slaptazodi");
+        Button generatePasswordButton = new Button("Generuoti slaptazodi");
         Button logoutButton = new Button("Atsijungti");
 
         addButton.setOnAction(event -> addEntry());
@@ -154,6 +164,8 @@ public class Main extends Application {
         });
 
         showPasswordButton.setOnAction(event -> showSelectedPassword());
+        copyPasswordButton.setOnAction(event -> copySelectedPassword());
+        generatePasswordButton.setOnAction(event -> generatePassword());
         logoutButton.setOnAction(event -> logout());
 
         table.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
@@ -172,11 +184,16 @@ public class Main extends Application {
         actionBox.getChildren().addAll(addButton, updateButton, deleteButton);
 
         HBox securityBox = new HBox(8);
-        securityBox.getChildren().addAll(showPasswordButton, logoutButton);
+        securityBox.getChildren().addAll(
+                showPasswordButton,
+                copyPasswordButton,
+                generatePasswordButton,
+                logoutButton
+        );
 
         VBox form = new VBox(8);
         form.setPadding(new Insets(10));
-        form.setPrefWidth(420);
+        form.setPrefWidth(500);
 
         form.getChildren().addAll(
                 new Label("Iraso duomenys"),
@@ -202,7 +219,7 @@ public class Main extends Application {
         root.setPadding(new Insets(10));
         root.getChildren().addAll(tableBox, form);
 
-        Scene scene = new Scene(root, 1050, 600);
+        Scene scene = new Scene(root, 1150, 600);
         stage.setScene(scene);
     }
 
@@ -345,6 +362,34 @@ public class Main extends Application {
         } catch (Exception e) {
             AlertUtil.showError("Klaida", e.getMessage());
         }
+    }
+
+    private void copySelectedPassword() {
+        PasswordEntry selected = table.getSelectionModel().getSelectedItem();
+
+        if (selected == null) {
+            AlertUtil.showError("Klaida", "Pasirinkite irasa");
+            return;
+        }
+
+        try {
+            String password = vaultService.decryptPassword(selected.getEncryptedPassword());
+
+            ClipboardContent content = new ClipboardContent();
+            content.putString(password);
+
+            Clipboard clipboard = Clipboard.getSystemClipboard();
+            clipboard.setContent(content);
+
+            AlertUtil.showInfo("Nukopijuota", "Slaptazodis nukopijuotas i iskarpine");
+        } catch (Exception e) {
+            AlertUtil.showError("Klaida", e.getMessage());
+        }
+    }
+
+    private void generatePassword() {
+        String generatedPassword = passwordGeneratorService.generatePassword(16);
+        passwordField.setText(generatedPassword);
     }
 
     private PasswordEntry findByTitle(String title) {

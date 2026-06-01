@@ -20,25 +20,40 @@ public class VaultService {
         this.user = user;
     }
 
-    public List<PasswordEntry> loadEntries() throws Exception {
+    public void createEmptyVaultIfNotExists() throws Exception {
+        Files.createDirectories(VAULTS_DIR);
+
         Path vaultPath = getVaultPath();
 
         if (!Files.exists(vaultPath)) {
-            Files.createDirectories(VAULTS_DIR);
-            Files.writeString(vaultPath, csvService.toCsv(List.of()), StandardCharsets.UTF_8);
+            String emptyCsv = csvService.toCsv(List.of());
+            String encryptedFileText = cryptoService.encrypt(emptyCsv, user.getVaultKey());
+
+            Files.writeString(vaultPath, encryptedFileText, StandardCharsets.UTF_8);
+        }
+    }
+
+    public List<PasswordEntry> loadEntries() throws Exception {
+        createEmptyVaultIfNotExists();
+
+        String encryptedFileText = Files.readString(getVaultPath(), StandardCharsets.UTF_8);
+
+        if (encryptedFileText.isBlank()) {
+            return List.of();
         }
 
-        String csvText = Files.readString(vaultPath, StandardCharsets.UTF_8);
+        String decryptedCsvText = cryptoService.decrypt(encryptedFileText, user.getVaultKey());
 
-        return csvService.fromCsv(csvText);
+        return csvService.fromCsv(decryptedCsvText);
     }
 
     public void saveEntries(List<PasswordEntry> entries) throws Exception {
         Files.createDirectories(VAULTS_DIR);
 
         String csvText = csvService.toCsv(entries);
+        String encryptedFileText = cryptoService.encrypt(csvText, user.getVaultKey());
 
-        Files.writeString(getVaultPath(), csvText, StandardCharsets.UTF_8);
+        Files.writeString(getVaultPath(), encryptedFileText, StandardCharsets.UTF_8);
     }
 
     public String encryptPassword(String password) throws Exception {
@@ -50,6 +65,6 @@ public class VaultService {
     }
 
     private Path getVaultPath() {
-        return VAULTS_DIR.resolve(user.getUsername() + ".csv");
+        return VAULTS_DIR.resolve(user.getUsername() + ".csv.enc");
     }
 }

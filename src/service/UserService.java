@@ -26,7 +26,7 @@ public class UserService {
                 Files.createFile(USERS_FILE);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Nepavyko paruosti duomenu aplankalo", e);
+            throw new RuntimeException("Nepavyko paruosti duomenu aplanko", e);
         }
     }
 
@@ -34,7 +34,7 @@ public class UserService {
         validateUsernameAndPassword(username, password);
 
         if (findUser(username) != null) {
-            throw new IllegalArgumentException("Toks vartotojas jau yra registruotas");
+            throw new IllegalArgumentException("Toks vartotojas jau egzistuoja");
         }
 
         byte[] salt = hashService.generateSalt();
@@ -53,15 +53,13 @@ public class UserService {
                 java.nio.file.StandardOpenOption.APPEND
         );
 
-        Path userVault = VAULTS_DIR.resolve(username + ".csv");
+        SecretKey vaultKey = hashService.deriveAesKey(password, salt);
 
-        if (!Files.exists(userVault)) {
-            Files.writeString(
-                    userVault,
-                    "Pavadinimas;UzsifruotasSlaptazodis;URL;Pastabos" + System.lineSeparator(),
-                    StandardCharsets.UTF_8
-            );
-        }
+        VaultService vaultService = new VaultService(
+                new AuthenticatedUser(username, vaultKey)
+        );
+
+        vaultService.createEmptyVaultIfNotExists();
     }
 
     public AuthenticatedUser login(String username, String password) throws Exception {
@@ -70,7 +68,7 @@ public class UserService {
         User user = findUser(username);
 
         if (user == null) {
-            throw new IllegalArgumentException("Toks vartotojas nerastas");
+            throw new IllegalArgumentException("Vartotojas nerastas");
         }
 
         byte[] salt = hashService.fromBase64(user.getSaltBase64());
@@ -79,7 +77,7 @@ public class UserService {
         boolean passwordCorrect = hashService.verifyPassword(password, salt, expectedHash);
 
         if (!passwordCorrect) {
-            throw new IllegalArgumentException("Slaptazodis neteisingas");
+            throw new IllegalArgumentException("Neteisingas slaptazodis");
         }
 
         SecretKey vaultKey = hashService.deriveAesKey(password, salt);
@@ -105,15 +103,15 @@ public class UserService {
 
     private void validateUsernameAndPassword(String username, String password) {
         if (username == null || username.trim().isBlank()) {
-            throw new IllegalArgumentException("Vartotojo vardo laukas negali buti tuscias");
+            throw new IllegalArgumentException("Vartotojo vardas negali buti tuscias");
         }
 
         if (!username.matches("[a-zA-Z0-9_]+")) {
-            throw new IllegalArgumentException("Vartotojo varde galima naudoti tik raides, skaicius ir _ zenkla");
+            throw new IllegalArgumentException("Vartotojo varde naudokite tik raides skaicius arba pabraukima");
         }
 
         if (password == null || password.length() < 6) {
-            throw new IllegalArgumentException("Slaptazodis privalo buti sudarytas bent is 6 simboliu");
+            throw new IllegalArgumentException("Slaptazodis turi buti bent 6 simboliu");
         }
     }
 }
